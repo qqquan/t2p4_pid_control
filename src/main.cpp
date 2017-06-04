@@ -12,6 +12,8 @@ constexpr double pi() { return M_PI; }
 double deg2rad(double x) { return x * pi() / 180; }
 double rad2deg(double x) { return x * 180 / pi(); }
 
+#define MAX_STEERING_ANGLE (1)
+#define MIN_STEERING_ANGLE (-1)
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
@@ -33,7 +35,8 @@ int main()
   uWS::Hub h;
 
   PID pid;
-  // TODO: Initialize the pid variable.
+  // TODO: tune the PID constant
+  pid.Init(0.05,0.001,0.006);
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -50,15 +53,22 @@ int main()
           double cte = std::stod(j[1]["cte"].get<std::string>());
           double speed = std::stod(j[1]["speed"].get<std::string>());
           double angle = std::stod(j[1]["steering_angle"].get<std::string>());
-          double steer_value;
+          double steer_value = 0.0;
           /*
           * TODO: Calcuate steering value here, remember the steering value is
           * [-1, 1].
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
-          
+          pid.UpdateError(cte);
+
+          steer_value = /*angle +*/ - pid.TotalError();
+          steer_value = steer_value>MAX_STEERING_ANGLE? MAX_STEERING_ANGLE:steer_value;
+          steer_value = steer_value<MIN_STEERING_ANGLE? MIN_STEERING_ANGLE:steer_value;
+
+
           // DEBUG
+          std::cout << "original steering angle: " << angle<<std::endl;
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
