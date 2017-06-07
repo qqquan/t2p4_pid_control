@@ -21,6 +21,7 @@ public:
 
 
   std::vector<double> dp;
+  std::vector<double> k_vec;
 
   int calibr_steps_n;
   double best_error;

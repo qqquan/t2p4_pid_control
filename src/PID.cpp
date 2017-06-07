@@ -14,39 +14,46 @@ PID::PID() {}
 PID::~PID() {}
 
 void PID::Init(double Kp, double Ki, double Kd) {
-    PID::Kp = Kp;
-    PID::Ki = Ki;
-    PID::Kd = Kd;
-    PID:dp = {1,1,1};
-    PID::calibr_steps_n = 300;
+
+    PID::k_vec = {Kp, Ki, Kd};
+    PID::dp = {1,1,1};
+    PID::calibr_steps_n = 1000;
     PID::calibr_state = E_HILL_CLIMB_UP;
-    PID::best_error = 0;
+    PID::best_error = 0xffffffff;
 }
 
 void PID::UpdateError(double cte) {
-    p_error = Kp*cte;
-    i_error = Ki*cte;
-    d_error = Kd*cte;
+    static double past_cte = 0;
+    static double sum_cte = 0;
 
-    std::cout <<  "p: "<<p_error<<"; i: "<<i_error<<"; d: "<< d_error << std::endl;
+    sum_cte += cte;
+    p_error = k_vec[0]*cte;
+    i_error = k_vec[1]*sum_cte ;
+    d_error = k_vec[2]*(cte-past_cte);
+
+    past_cte = cte;
+
+    std::cout <<  "p error: "<<p_error<<"; i error: "<<i_error<<"; d error: "<< d_error << std::endl;
 }
 
 double PID::TotalError() {
     return p_error + i_error + d_error;
 }             
 
-bool PID::isCalibrDone(void)
+bool PID::isCalibrDone (void)
 {
-    double sum_of_dp = std::accumulate(dp.begin(), dp.end(), 0);
-
+    double sum_of_dp = std::accumulate(dp.begin(), dp.end(), 0.0);
+    std::cout << "@isCalibrDone dp: "<<dp[0]<<", "<<dp[1]<<", "<<dp[2]<<std::endl;
+    std::cout << "@isCalibrDone sum of dp: "<<(sum_of_dp)<<std::endl;
     return (sum_of_dp < 0.00001 );
 }
 
+#define PID_STABALIZATION_TIME 20
 bool PID::Calibrate(double cte)
 {
 
     bool is_a_cycle_finished = false;
-          // while sum(dp)>0.00001: 
+      // while sum(dp)>0.00001: 
       //   for i in range(len(p)): 
       //       p[i] += dp[i] 
       //       robot = make_robot() 
@@ -68,16 +75,16 @@ bool PID::Calibrate(double cte)
 
 
 
+  std::cout << "calibr_state: "<<calibr_state<<std::endl;
   switch(calibr_state)
   {
+    static int idx = -1;
 
     case E_HILL_CLIMB_UP:
     {
 
-
-        Kp += dp[0];
-        Ki += dp[1];
-        Kd += dp[2];
+        idx = (idx + 1)%dp.size();
+        k_vec[idx] += dp[idx];
 
         calibr_state = E_HILL_CLIMB_UP_EVALUATION;
         break;
@@ -86,35 +93,41 @@ bool PID::Calibrate(double cte)
     case E_HILL_CLIMB_UP_EVALUATION:
     {
 
+        std::cout << "index: "<<idx<<std::endl;
         static int steps = 0;
-        static double err = 0.0;
+        // static double err = 0.0;
+        static double err_sum = 0.0;
 
         steps++;
 
-        if(steps > calibr_steps_n/2) //only calc error when it stabilizes a bit
+        std::cout << "HILL_CLIMB_UP steps: "<<steps<<std::endl;
+
+        if(steps > PID_STABALIZATION_TIME) //only calc error when it stabilizes a bit
         {
-            err = (err + cte*cte)/2.0;
+            err_sum +=  cte*cte;
+            std::cout<<"current err: " << err_sum/(steps-PID_STABALIZATION_TIME)<<std::endl;
+            std::cout<<"best err: " << best_error<<std::endl;
 
             if(steps > calibr_steps_n)
             {
-                steps = 0;
-                is_a_cycle_finished  = true;
-                if(err < best_error)
-                {
-                    best_error = err;
-                    for(auto &d :dp) { d *= 1.1;}
 
+                double err_avg = err_sum/(steps-PID_STABALIZATION_TIME);
+                if(err_avg < best_error)
+                {
+                    best_error = err_avg;
+                    dp[idx] *= 1.1;
                     calibr_state = E_HILL_CLIMB_UP;
                 }
                 else
                 {
-
-                    Kp -= 2*dp[0];
-                    Ki -= 2*dp[1];
-                    Kd -= 2*dp[2];
+                    k_vec[idx] -= 2*dp[idx];
 
                     calibr_state = E_HILL_DESCEND_EVALUATION;
                 }
+
+                steps = 0;
+                is_a_cycle_finished  = true;
+                err_sum = 0;
             }
         }
 
@@ -126,13 +139,19 @@ bool PID::Calibrate(double cte)
     {
 
         static int steps = 0;
-        static double err = 0.0;
+        // static double err = 0.0;
+        static double err_sum = 0.0;
 
         steps++;
+        std::cout << "index: "<<idx<<std::endl;
+        std::cout << "HILL_DESCEND steps: "<<steps<<std::endl;
 
-        if(steps > calibr_steps_n/2) //only calc error when it stabilizes a bit
+        if(steps > PID_STABALIZATION_TIME) //only calc error when it stabilizes a bit
         {
-            err = (err + cte*cte)/2.0;
+            err_sum +=  cte*cte;
+
+            std::cout<<"current err: " << err_sum/(steps-PID_STABALIZATION_TIME)<<std::endl;
+            std::cout<<"best err: " << best_error<<std::endl;
 
             if(steps > calibr_steps_n)
             {
@@ -142,26 +161,27 @@ bool PID::Calibrate(double cte)
               //           else: 
               //               p[i] += dp[i] 
               //               dp[i] *= 0.9
+                double err_avg = err_sum/(steps-PID_STABALIZATION_TIME);
 
-                if(err < best_error)
+                if(err_avg < best_error)
                 {
-                    best_error = err;
-                    for(auto &d :dp) { d *= 1.1;}
+                    best_error = err_avg;
+                    dp[idx] *= 1.1;
                 }
                 else
                 {
                     //retore the original pid constants
-                    Kp += dp[0];
-                    Ki += dp[1];
-                    Kd += dp[2];
+                    k_vec[idx] += dp[idx];
+
                     //tighten search band
-                    for(auto &d :dp) { d *= 0.9;}
+                    dp[idx] *= 0.9;
 
 
                 }
 
                 is_a_cycle_finished  = true;
                 steps = 0;
+                err_sum = 0;
                 calibr_state = E_HILL_CLIMB_UP;
 
             }

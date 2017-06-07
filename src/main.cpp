@@ -5,6 +5,9 @@
 #include <math.h>
 #include <map>
 
+
+#define ENABLE_CALIBRATION 0
+
 // for convenience
 using json = nlohmann::json;
 
@@ -41,7 +44,13 @@ int main()
 
   PID pid;
   // TODO: tune the PID constant
-  pid.Init(0.05,0.001,0.006);
+
+#if ENABLE_CALIBRATION
+  pid.Init(0,0,0);
+  
+#else
+  pid.Init(0.674367,0.0000193633,2.12259);
+#endif
 
   h.onMessage([&pid](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
@@ -65,7 +74,27 @@ int main()
           * NOTE: Feel free to play around with the throttle and speed. Maybe use
           * another PID controller to control the speed!
           */
+        #if ENABLE_CALIBRATION
+          if (pid.Calibrate(cte))
+          {
+              std::cout << "------ Reset Simulation------  " <<std::endl;
+
+              std::string msg = "42[\"reset\",{}]";
+              ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
+              return;
+          }
+          
+          if (pid.isCalibrDone())
+          {
+            std::cout << "============ Calibration Finished  ========== " <<std::endl;
+            std::cout << "p: " << pid.k_vec[0] << std::endl;
+            std::cout << "i: " << pid.k_vec[1] << std::endl;
+            std::cout << "d: " << pid.k_vec[2] << std::endl; 
+            std::cout << "================================================= " <<std::endl;
+          }
+        #endif
           pid.UpdateError(cte);
+
 
           steer_value = /*angle +*/ - pid.TotalError();
 
@@ -76,7 +105,9 @@ int main()
 
 
           // DEBUG
-          std::cout << "original steering angle: " << angle<<std::endl;
+          std::cout << "p: " << pid.k_vec[0] << std::endl;
+          std::cout << "i: " << pid.k_vec[1] << std::endl;
+          std::cout << "d: " << pid.k_vec[2] << std::endl;          
           std::cout << "CTE: " << cte << " Steering Value: " << steer_value << std::endl;
 
           json msgJson;
