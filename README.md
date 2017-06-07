@@ -33,3 +33,12 @@ Self-Driving Car Engineer Nanodegree Program
 3. Compile: `cmake .. && make`
 4. Run it: `./pid`. 
 
+## PID Gains
+
+1. P: The proportional term adjusts how fast the system corrects the tracking error. If the value is too big, the system can become unstable.
+2. I: The integral term compensates any system bias. In this simulation project, the bias is very small or none.
+3. D: The derivative terms dampens the overshoot of the system. It is sensitive to noise. 
+
+## PID Tunning
+The twiddle method is used to tune the PID gains. With 200 time steps, the following resulted gains allow the car to drive around the track: 'Kp=0.674367, Ki=0.0000193633, Kd=2.12259'
+
