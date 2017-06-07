@@ -40,5 +40,6 @@ Self-Driving Car Engineer Nanodegree Program
 3. D: The derivative terms dampens the overshoot of the system. It is sensitive to noise. 
 
 ## PID Tunning
-The twiddle method is used to tune the PID gains. With 200 time steps, the following resulted gains allow the car to drive around the track: 'Kp=0.674367, Ki=0.0000193633, Kd=2.12259'
+
+The twiddle method is used to tune the PID gains. With 200 time steps, the following resulted gains allow the car to drive around the track: `Kp=0.674367, Ki=0.0000193633, Kd=2.12259`
 
